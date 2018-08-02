@@ -176,6 +176,9 @@ module Hbc
       private
 
       def step(name, travis_id)
+        success = false
+        output = nil
+
         Travis.fold travis_id do
           print "#{name} "
 
@@ -190,14 +193,15 @@ module Hbc
 
           if success
             puts Formatter.success("✔")
+            puts output
           else
             puts Formatter.error("✘")
           end
-
-          puts output
-
-          success
         end
+
+        puts output unless success
+
+        success
       end
 
       def tap
