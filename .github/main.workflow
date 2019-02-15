@@ -1,10 +1,10 @@
 workflow "Auto-merge PRs" {
-  resolves = ["check success"]
   on = "status"
+  resolves = ["Filter successful Travis CI builds."]
 }
 
-action "check success" {
+action "Filter successful Travis CI builds." {
   uses = "actions/bin/filter@master"
-  args = "env | sort; jq . \"$GITHUB_EVENT_PATH\"; [ \"$(jq -r .context \"$GITHUB_EVENT_PATH\")\" = 'continuous-integration/travis-ci/pr' ]"
+  args = "env | sort; jq . \"$GITHUB_EVENT_PATH\"; [ \"$(jq -r .context \"$GITHUB_EVENT_PATH\")\" = 'continuous-integration/travis-ci/pr' ] && [ \"$(jq -r .state \"$GITHUB_EVENT_PATH\")\" = 'success' ]"
   secrets = ["GITHUB_TOKEN"]
 }
