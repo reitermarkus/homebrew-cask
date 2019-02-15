@@ -5,6 +5,6 @@ workflow "Auto-merge PRs" {
 
 action "check success" {
   uses = "actions/bin/filter@46ffca7632504e61db2d4cb16be1e80f333cb859"
-  args = "env | sort"
+  args = "env | sort; echo \"'$@'\""
   secrets = ["GITHUB_TOKEN"]
 }
