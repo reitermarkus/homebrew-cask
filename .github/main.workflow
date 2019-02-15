@@ -6,7 +6,6 @@ workflow "Auto-merge PRs" {
 action "Filter successful Travis CI builds." {
   uses = "actions/bin/filter@master"
   args = "[ \"$(jq -r .context \"$GITHUB_EVENT_PATH\")\" = 'continuous-integration/travis-ci/pr' ] && [ \"$(jq -r .state \"$GITHUB_EVENT_PATH\")\" = 'success' ]"
-  secrets = ["GITHUB_TOKEN"]
 }
 
 action "Filter version bumps." {
@@ -18,6 +17,7 @@ action "Filter version bumps." {
 action "Show environment." {
   uses = "actions/bin/filter@46ffca7632504e61db2d4cb16be1e80f333cb859"
   args = "env | sort"
+  secrets = ["GITHUB_TOKEN"]
 }
 
 action "Show event info." {
