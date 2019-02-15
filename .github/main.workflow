@@ -1,6 +1,6 @@
 workflow "Auto-merge PRs" {
   resolves = ["check success"]
-  on = "pull_request"
+  on = "status"
 }
 
 action "check success" {
