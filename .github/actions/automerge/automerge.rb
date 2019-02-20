@@ -108,10 +108,7 @@ begin
 
     pr = find_pull_request_for_status(status)
     merge_pull_request(pr, [status])
-  when "pull_request"
-    pr = event.fetch("pull_request")
-    merge_pull_request(pr)
-  when "pull_request_review"
+  when "pull_request", "pull_request_review", "pull_request_review_comment"
     pr = event.fetch("pull_request")
     merge_pull_request(pr)
   when "issue_comment"
