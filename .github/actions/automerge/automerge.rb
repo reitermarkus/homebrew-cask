@@ -121,15 +121,14 @@ skip_reason = catch :skip do
     prs = GitHub.pull_requests(ENV["GITHUB_REPOSITORY"], state: :open, base: "master")
 
     merged_prs = prs.select do |pr|
-      next if catch :skip do
+      next false if catch :skip do
         begin
           merge_pull_request(pr, statuses)
+          next true
         rescue
           next false
         end
       end
-
-      true
     end
 
     skip "No “simple” version bump pull requests found." if merged_prs.empty?
