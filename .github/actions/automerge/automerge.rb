@@ -133,7 +133,6 @@ skip_reason = catch :skip do
     end
 
     skip "No “simple” version bump pull requests found." if merged_prs.empty?
-    next
   else
     skip "Unsupported GitHub Actions event."
   end
