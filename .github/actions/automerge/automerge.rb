@@ -17,9 +17,8 @@ ENV["GITHUB_TOKEN"]      = ENV.delete("HOMEBREW_GITHUB_TOKEN")
 ENV["GITHUB_WORKFLOW"]   = ENV.delete("HOMEBREW_GITHUB_WORKFLOW")
 ENV["GITHUB_WORKSPACE"]  = ENV.delete("HOMEBREW_GITHUB_WORKSPACE")
 
-def skip(message = nil)
-  $stderr.puts message
-  exit 78
+def skip(message)
+  throw :skip, message
 end
 
 event = JSON.parse(File.read(ENV.fetch("GITHUB_EVENT_PATH")))
@@ -57,36 +56,39 @@ def diff_for_pull_request(pr)
   GitDiff.from_string(output) if status.success?
 end
 
-def merge_pull_request(pr)
-  puts "Merging pull request #{pr.fetch("number")}…"
+def merge_pull_request(pr, statuses = GitHub.open_api(pr.fetch("statuses_url")))
+  puts "PR:"
+  puts JSON.pretty_generate(pr)
+  puts
 
-  return # TODO: Remove when finished.
+  skip "CI status is not successful." unless passed_ci?(statuses)
+
+  diff = diff_for_pull_request(pr)
+  skip "Not a “simple” version bump pull request." unless diff.simple?
+
+  puts "Merging pull request #{pr.fetch("number")}…"
 
   repo   = pr.fetch("base").fetch("repo").fetch("full_name")
   number = pr.fetch("number")
   sha    = pr.fetch("head").fetch("sha")
 
-  puts "GITHUB_SHA: #{ENV["GITHUB_SHA"]}"
-  puts "PR_SHA:     #{sha}"
-
   begin
     tries ||= 0
 
-    GitHub.merge_pull_request(
-      repo,
-      number: number, sha: sha,
-      merge_method: :squash,
-    )
+    # GitHub.merge_pull_request(
+    #   repo,
+    #   number: number, sha: sha,
+    #   merge_method: :squash,
+    # )
   rescue => e
+    $stderr.puts "Failed to merge pull request #{pr.fetch("number")}."
     $stderr.puts e
     raise if (tries += 1) > 3
     sleep 5
     retry
   end
-end
 
-def check_diff(diff)
-  diff.single_cask? && diff.only_version_or_checksum?
+  puts "Pull request #{pr.fetch("number")} merged successfully."
 end
 
 def passed_ci?(statuses = [])
@@ -98,53 +100,46 @@ def passed_ci?(statuses = [])
   statuses.dig("continuous-integration/travis-ci/pr", "state") == "success"
 end
 
-case ENV["GITHUB_EVENT_NAME"]
-when "status"
-  status = event
+skip_reason = catch :skip do
+  case ENV["GITHUB_EVENT_NAME"]
+  when "status"
+    status = event
 
-  pr = find_pull_request_for_status(status)
-  statuses = [status]
-when "pull_request"
-  pr = event.fetch("pull_request")
-  statuses = GitHub.open_api(pr.fetch("statuses_url"))
-when "issue_comment"
-  issue = event.fetch("issue")
+    pr = find_pull_request_for_status(status)
+    merge_pull_request(pr, [status])
+  when "pull_request"
+    pr = event.fetch("pull_request")
+    merge_pull_request(pr)
+  when "issue_comment"
+    issue = event.fetch("issue")
 
-  skip "Not a pull request." unless pr_url = issue.dig("pull_request", "url")
+    skip "Not a pull request." unless pr_url = issue.dig("pull_request", "url")
 
-  pr = GitHub.open_api(pr_url)
-  statuses = GitHub.open_api(pr.fetch("statuses_url"))
-when "push"
-  prs = GitHub.pull_requests(ENV["GITHUB_REPOSITORY"], state: :open, base: "master")
+    pr = GitHub.open_api(pr_url)
+    merge_pull_request(pr)
+  when "push"
+    prs = GitHub.pull_requests(ENV["GITHUB_REPOSITORY"], state: :open, base: "master")
 
-  merged_prs = 0
+    merged_prs = prs.select do |pr|
+      next if catch :skip do
+        begin
+          merge_pull_request(pr, statuses)
+        rescue
+          next false
+        end
+      end
 
-  prs.each do |pr|
-    statuses = GitHub.open_api(pr.fetch("statuses_url"))
-    next unless passed_ci?(statuses)
-
-    begin
-      merge_pull_request(pr)
-      puts "Pull request #{pr.fetch("number")} merged successfully."
-      merged_prs += 1
-    rescue
-      $stderr.puts "Failed to merge pull request #{pr.fetch("number")}."
+      true
     end
-  end
 
-  skip "No “simple” version bump pull requests found." if merged_prs == 0
-  exit
-else
-  skip "Unsupported GitHub Actions event."
+    skip "No “simple” version bump pull requests found." if merged_prs.empty?
+    next
+  else
+    skip "Unsupported GitHub Actions event."
+  end
 end
 
-skip "CI status is not successful." unless passed_ci?(statuses)
-
-puts "PR:"
-puts JSON.pretty_generate(pr)
-puts
-
-diff = diff_for_pull_request(pr)
-skip "Not a “simple” version bump pull request." unless check_diff(diff)
-
-merge_pull_request(pr)
+if skip_reason
+  $stderr.puts skip_reason
+  exit 78
+end

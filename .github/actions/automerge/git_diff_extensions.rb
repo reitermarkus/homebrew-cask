@@ -2,6 +2,10 @@ require "git_diff"
 
 module GitDiffExtension
   refine GitDiff::Diff do
+    def simple?
+      single_cask? && only_version_or_checksum?
+    end
+
     def single_cask?
       return false unless files.count == 1
       file = files.first
