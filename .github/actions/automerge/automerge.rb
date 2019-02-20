@@ -17,8 +17,10 @@ ENV["GITHUB_TOKEN"]      = ENV.delete("HOMEBREW_GITHUB_TOKEN")
 ENV["GITHUB_WORKFLOW"]   = ENV.delete("HOMEBREW_GITHUB_WORKFLOW")
 ENV["GITHUB_WORKSPACE"]  = ENV.delete("HOMEBREW_GITHUB_WORKSPACE")
 
+class Skip < StandardError; end
+
 def skip(message)
-  throw :skip, message
+  raise Skip, message
 end
 
 event = JSON.parse(File.read(ENV.fetch("GITHUB_EVENT_PATH")))
@@ -80,6 +82,7 @@ def merge_pull_request(pr, statuses = GitHub.open_api(pr.fetch("statuses_url")))
     #   number: number, sha: sha,
     #   merge_method: :squash,
     # )
+    puts "Pull request #{pr.fetch("number")} merged successfully."
   rescue => e
     $stderr.puts "Failed to merge pull request #{pr.fetch("number")}."
     $stderr.puts e
@@ -87,8 +90,6 @@ def merge_pull_request(pr, statuses = GitHub.open_api(pr.fetch("statuses_url")))
     sleep 5
     retry
   end
-
-  puts "Pull request #{pr.fetch("number")} merged successfully."
 end
 
 def passed_ci?(statuses = [])
@@ -100,7 +101,7 @@ def passed_ci?(statuses = [])
   statuses.dig("continuous-integration/travis-ci/pr", "state") == "success"
 end
 
-skip_reason = catch :skip do
+begin
   case ENV["GITHUB_EVENT_NAME"]
   when "status"
     status = event
@@ -121,13 +122,11 @@ skip_reason = catch :skip do
     prs = GitHub.pull_requests(ENV["GITHUB_REPOSITORY"], state: :open, base: "master")
 
     merged_prs = prs.select do |pr|
-      next false if catch :skip do
-        begin
-          merge_pull_request(pr, statuses)
-          next true
-        rescue
-          next false
-        end
+      begin
+        merge_pull_request(pr, statuses)
+        true
+      rescue
+        false
       end
     end
 
@@ -135,9 +134,7 @@ skip_reason = catch :skip do
   else
     skip "Unsupported GitHub Actions event."
   end
-end
-
-if skip_reason
-  $stderr.puts skip_reason
+rescue Skip => reason
+  $stderr.puts reason
   exit 78
 end
