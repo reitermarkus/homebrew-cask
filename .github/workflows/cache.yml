@@ -16,17 +16,19 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   update:
-    if: startsWith(github.repository, 'Homebrew/')
-    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os:
+          - macos-latest
+          - ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Set up Homebrew
         id: set-up-homebrew
-        uses: Homebrew/actions/setup-homebrew@master
+        uses: Homebrew/actions/setup-homebrew@cache-path
         with:
           test-bot: false
+          debug: true
 
       - name: Cache Homebrew Gems
         id: cache
