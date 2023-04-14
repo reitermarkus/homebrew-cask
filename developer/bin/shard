@@ -1,0 +1,60 @@
+#!/usr/bin/env ruby
+
+require 'pathname'
+require 'yaml'
+require 'fileutils'
+
+casks_dir = Pathname('Casks')
+
+casks = casks_dir.glob("**/*.rb").to_h { |path| [path.basename(".rb").to_s, path] }
+
+def shard(items, n: 0, max_items:)
+  grouped_items = items.group_by { |c| c[0..n] }
+
+  grouped_items.each_with_object({}) do |(k, v), acc|
+    if v.count <= max_items
+      acc[k.split("").join("/")] = v
+      next
+    end
+
+    acc.merge!(shard(v, n: n + 1, max_items: max_items))
+  end
+end
+
+def shard_first_last(items, max_items: 0)
+  first = items.group_by { |c| c[0] }
+  single_chars = first.flat_map { |k, v| v.count <= max_items ? [k] : [] }
+
+  items.group_by { |c|
+    first = c[0]
+    last = c[-1]
+    single_chars.include?(first) ? "#{first}?" : "#{first}#{last}"
+  }
+end
+
+sharded_casks = shard(casks.keys, max_items: 100)
+# sharded_casks = shard_first_last(casks.keys)
+# sharded_casks = shard_first_last(casks.keys, max_items: sharded_casks.transform_values(&:count).values.max)
+
+# puts sharded_casks.to_yaml
+
+# Show distribution.
+puts sharded_casks
+       .map { |k, v| "#{"#{k}/".ljust(5)}#{v.count.to_s.rjust(3)} #{"#" * v.count}" }
+       .sort
+
+sharded_casks.each do |dir, cask_tokens|
+  dir = casks_dir/dir
+  dir.mkpath
+
+  cask_tokens.each do |cask_token|
+    old_path = casks.fetch(cask_token)
+    new_path = dir/old_path.basename
+
+    next if old_path == new_path
+
+    FileUtils.mv old_path, new_path
+    FileUtils.rm_f old_path.dirname/".DS_Store"
+    FileUtils.rmdir old_path.dirname if old_path.dirname.children.empty?
+  end
+end
